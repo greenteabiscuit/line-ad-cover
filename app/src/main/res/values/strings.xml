@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LINE Ad Cover</string>
+    <string name="service_name">LINE promotional banner cover</string>
+    <string name="accessibility_description">Uses LINE accessibility content only to locate and visually mask the LINE VOOM promotional banner in Chats. No data is stored or transmitted.</string>
+    <string name="title">LINE Ad Cover</string>
+    <string name="explanation">Masks the LINE VOOM promotional banner shown between Search and your first chat. It does not remove or reflow LINE content.</string>
+    <string name="privacy">Accessibility access is used only to find and mask this promo banner while LINE is on screen. No content or personal data is stored or transmitted.</string>
+    <string name="status_enabled">Accessibility service: enabled</string>
+    <string name="status_disabled">Accessibility service: disabled</string>
+    <string name="open_accessibility">Open Accessibility Settings</string>
+    <string name="open_line">Open LINE</string>
+    <string name="line_not_installed">LINE is not installed or cannot be opened.</string>
+</resources>
