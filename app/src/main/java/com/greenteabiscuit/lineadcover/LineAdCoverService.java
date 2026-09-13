@@ -53,6 +53,8 @@ public final class LineAdCoverService extends AccessibilityService {
     private WindowManager windowManager;
     private final MaskOverlay bannerMask = new MaskOverlay(
             "LINE VOOM promotional banner mask", false);
+    private final MaskOverlay homeTabMask = new MaskOverlay(
+            "LINE Home bottom tab mask", true);
     private final MaskOverlay bottomTabsMask = new MaskOverlay(
             "LINE final three bottom tabs mask", true);
     private int trackedBannerHeight;
@@ -121,7 +123,8 @@ public final class LineAdCoverService extends AccessibilityService {
         root.getBoundsInScreen(rootRect);
         if (!rootRect.isEmpty()
                 && rootRect.width() < Math.round(displayRect.width() * 0.80f)
-                && (bannerMask.isVisible() || bottomTabsMask.isVisible())) {
+                && (bannerMask.isVisible() || homeTabMask.isVisible()
+                || bottomTabsMask.isVisible())) {
             return;
         }
         boolean friendsSubviewSelected = isFriendsSubviewSelected(root, displayRect);
@@ -133,8 +136,10 @@ public final class LineAdCoverService extends AccessibilityService {
         NavigationState navigation = findNavigation(root, displayRect, density);
         AdRowGeometry.Box bottomTabs = NavigationGeometry.lastThreeTabs(navigation.bounds());
         if (bottomTabs.height() > 0) {
+            homeTabMask.show(NavigationGeometry.homeTab(navigation.bounds()));
             bottomTabsMask.show(bottomTabs);
         } else {
+            homeTabMask.remove();
             bottomTabsMask.remove();
         }
 
@@ -557,6 +562,7 @@ public final class LineAdCoverService extends AccessibilityService {
     private void removeOverlays() {
         handler.removeCallbacks(foregroundCheck);
         bannerMask.remove();
+        homeTabMask.remove();
         bottomTabsMask.remove();
     }
 

@@ -2,7 +2,7 @@ package com.greenteabiscuit.lineadcover;
 
 import java.util.List;
 
-/** Pure geometry used to locate LINE's bottom navigation and cover its last three tabs. */
+/** Pure geometry used to locate LINE's bottom navigation and cover every tab except Chats. */
 public final class NavigationGeometry {
     private static final float MIN_WIDTH_FRACTION = 0.80f;
     private static final float MIN_TOP_FRACTION = 0.60f;
@@ -70,6 +70,13 @@ public final class NavigationGeometry {
         top = Math.max(display.top(), top);
         if (bottom <= top) return empty(display);
         return new AdRowGeometry.Box(display.left(), top, display.right(), bottom);
+    }
+
+    /** Covers Home, the first of five equal-width navigation sections. */
+    public static AdRowGeometry.Box homeTab(AdRowGeometry.Box navigation) {
+        int right = navigation.left() + Math.round(navigation.width() * 0.2f);
+        return new AdRowGeometry.Box(
+                navigation.left(), navigation.top(), right, navigation.bottom());
     }
 
     /** Covers exactly the final three of five equal-width navigation sections. */

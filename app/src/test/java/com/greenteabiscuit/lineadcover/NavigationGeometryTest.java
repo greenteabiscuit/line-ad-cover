@@ -48,4 +48,21 @@ public final class NavigationGeometryTest {
 
         assertEquals(new AdRowGeometry.Box(436, 2100, 1060, 2268), result);
     }
+
+    @Test public void coversHomeAndLeavesOnlyChatsExposedWithOffsetAndRounding() {
+        AdRowGeometry.Box navigation = new AdRowGeometry.Box(23, 2100, 1066, 2268);
+        AdRowGeometry.Box home = NavigationGeometry.homeTab(navigation);
+        AdRowGeometry.Box lastThree = NavigationGeometry.lastThreeTabs(navigation);
+
+        assertEquals(new AdRowGeometry.Box(23, 2100, 232, 2268), home);
+        assertEquals(new AdRowGeometry.Box(440, 2100, 1066, 2268), lastThree);
+        assertEquals(208, lastThree.left() - home.right());
+    }
+
+    @Test public void missingNavigationProducesNoHomeMaskHeight() {
+        AdRowGeometry.Box navigation = NavigationGeometry.selectContainer(
+                List.of(), DISPLAY, 3f);
+
+        assertEquals(0, NavigationGeometry.homeTab(navigation).height());
+    }
 }
