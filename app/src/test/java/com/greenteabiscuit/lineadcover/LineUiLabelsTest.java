@@ -27,10 +27,30 @@ public final class LineUiLabelsTest {
         assertEquals(4, LineUiLabels.topLevelTab("Apps"));
     }
 
+    @Test public void treatsLabelNamingSeveralTabsAsUnknown() {
+        assertEquals(-1, LineUiLabels.topLevelTab("Home, Chats, VOOM, News, Wallet"));
+        assertEquals(-1, LineUiLabels.topLevelTab("home_tab_chats"));
+    }
+
     @Test public void recognizesLocalizedPromoWording() {
         assertTrue(LineUiLabels.isPromo("Trending now on LINE VOOM"));
         assertTrue(LineUiLabels.isPromo("LINE VOOMのおすすめ"));
         assertFalse(LineUiLabels.isPromo("VOOM"));
+    }
+
+    /**
+     * The service strips the {@code jp.naver.line.android:id/} qualifier before matching,
+     * so a bare VOOM node no longer borrows the "line" the promo wording requires.
+     */
+    @Test public void rejectsPromoQualifiedOnlyByTheViewIdPackage() {
+        assertFalse(LineUiLabels.isPromo("voom voom_banner_title"));
+        assertTrue(LineUiLabels.isPromo("voom jp.naver.line.android:id/voom_banner_title"));
+    }
+
+    @Test public void rejectsNegatedSelectionWording() {
+        assertFalse(LineUiLabels.isSelected("Tab, Home, not selected"));
+        assertFalse(LineUiLabels.isSelected("ホーム、未選択"));
+        assertFalse(LineUiLabels.isSelected("Tab, VOOM, unselected"));
     }
 
     @Test public void recognizesSemanticSearchAndSelection() {

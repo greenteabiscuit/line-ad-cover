@@ -62,6 +62,33 @@ public final class AdRowGeometry {
         return candidate;
     }
 
+    /**
+     * How much of the box is horizontally on screen. LINE's top-level screens are
+     * ViewPager pages, so the Home page is laid out at negative x and the Shopping page
+     * beyond the right edge, both fully populated in the accessibility tree and both
+     * exactly as wide as the display. Their own width says nothing about whether the
+     * user can see them; this does, and it reads zero for an adjacent page.
+     */
+    public static int visibleWidth(Box value, Box display) {
+        return Math.max(0,
+                Math.min(value.right, display.right) - Math.max(value.left, display.left));
+    }
+
+    /** True when any part of the box is on the visible page rather than beside it. */
+    public static boolean onVisiblePage(Box value, Box display) {
+        return visibleWidth(value, display) > 0;
+    }
+
+    /**
+     * True when a gap is open but too short to be a banner. That is the banner on its
+     * way out behind the header, which the tracker may still follow. A closed gap, or
+     * one too tall to be a banner, means the measurement cannot be trusted at all.
+     */
+    public static boolean isClosingGap(int top, int bottom, float density) {
+        int height = bottom - top;
+        return height > 0 && height < Math.round(MIN_GAP_HEIGHT_DP * density);
+    }
+
     /** Moves a previously measured row with its lower edge and clips it below a header. */
     public static Box trackGap(
             int lowerEdge,
@@ -76,6 +103,20 @@ public final class AdRowGeometry {
             return new Box(display.left, display.top, display.right, display.top);
         }
         return new Box(display.left, top, display.right, bottom);
+    }
+
+    /**
+     * Lower clip boundary for a detected promo row. The chat list edge bounds the row
+     * only when it genuinely sits below it, as in the layout where the banner is a
+     * sibling above the list. A missing list, or one that contains the row because LINE
+     * renders the promotion as a list item, cannot veto the row; the navigation edge
+     * bounds it instead.
+     */
+    public static int lowerBoundary(Box row, Box list, int navigationTop) {
+        if (list != null && list.top() >= row.bottom()) {
+            return Math.min(navigationTop, list.top());
+        }
+        return navigationTop;
     }
 
     /** Clips a detected row between the fixed header and the live list edge. */

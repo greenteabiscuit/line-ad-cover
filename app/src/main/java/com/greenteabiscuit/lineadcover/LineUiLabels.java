@@ -29,31 +29,55 @@ final class LineUiLabels {
                 || label.contains("友達");
     }
 
-    /** Returns the tab's position, merging names used by old and redesigned LINE builds. */
+    /**
+     * Returns the tab's position, merging names used by old and redesigned LINE builds.
+     * A label naming more than one tab is a shared container rather than a single tab,
+     * so it resolves to unknown instead of letting declaration order pick a winner.
+     */
     static int topLevelTab(String value) {
         String label = normalize(value);
-        if (containsWord(label, "home") || label.contains("ホーム")) return 0;
-        if (containsWord(label, "chat")
-                || containsWord(label, "chats")
-                || containsWord(label, "talk")
-                || label.contains("トーク")) return 1;
-        if (containsWord(label, "voom")
-                || containsWord(label, "shopping")
-                || containsWord(label, "shop")
-                || label.contains("ショッピング")) return 2;
-        if (containsWord(label, "news") || label.contains("ニュース")) return 3;
-        if (containsWord(label, "app")
-                || containsWord(label, "apps")
-                || containsWord(label, "wallet")
-                || containsWord(label, "calls")
-                || label.contains("アプリ")
-                || label.contains("ウォレット")
-                || label.contains("通話")) return 4;
-        return -1;
+        int found = -1;
+        for (int tab = 0; tab < 5; tab++) {
+            if (!namesTab(label, tab)) continue;
+            if (found >= 0) return -1;
+            found = tab;
+        }
+        return found;
+    }
+
+    private static boolean namesTab(String label, int tab) {
+        return switch (tab) {
+            case 0 -> containsWord(label, "home") || label.contains("ホーム");
+            case 1 -> containsWord(label, "chat")
+                    || containsWord(label, "chats")
+                    || containsWord(label, "talk")
+                    || label.contains("トーク");
+            case 2 -> containsWord(label, "voom")
+                    || containsWord(label, "shopping")
+                    || containsWord(label, "shop")
+                    || label.contains("ショッピング");
+            case 3 -> containsWord(label, "news") || label.contains("ニュース");
+            case 4 -> containsWord(label, "app")
+                    || containsWord(label, "apps")
+                    || containsWord(label, "wallet")
+                    || containsWord(label, "calls")
+                    || label.contains("アプリ")
+                    || label.contains("ウォレット")
+                    || label.contains("通話");
+            default -> false;
+        };
     }
 
     static boolean isSelected(String value) {
         String label = normalize(value);
+        if (label.contains("not selected")
+                || containsWord(label, "unselected")
+                || containsWord(label, "deselected")
+                || label.contains("未選択")
+                || label.contains("非選択")
+                || label.contains("選択されていません")) {
+            return false;
+        }
         return containsWord(label, "selected")
                 || label.contains("選択中")
                 || label.contains("選択済み");
