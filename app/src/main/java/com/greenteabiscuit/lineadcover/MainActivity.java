@@ -9,11 +9,13 @@ import android.provider.Settings;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 public final class MainActivity extends Activity {
     private static final String LINE_PACKAGE = "jp.naver.line.android";
+    private static final String WECHAT_PACKAGE = "com.tencent.mm";
     private TextView status;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -40,9 +42,16 @@ public final class MainActivity extends Activity {
 
         Button line = new Button(this);
         line.setText(R.string.open_line);
-        line.setOnClickListener(v -> openLine());
+        line.setOnClickListener(v -> openApp(LINE_PACKAGE, R.string.line_not_installed));
         content.addView(line, matchWidth());
-        setContentView(content);
+
+        Button wechat = new Button(this);
+        wechat.setText(R.string.open_wechat);
+        wechat.setOnClickListener(v -> openApp(WECHAT_PACKAGE, R.string.wechat_not_installed));
+        content.addView(wechat, matchWidth());
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        setContentView(scroll);
     }
 
     @Override protected void onResume() {
@@ -56,18 +65,17 @@ public final class MainActivity extends Activity {
         String enabled = Settings.Secure.getString(
                 getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
         if (enabled == null) return false;
-        String component = new ComponentName(this, LineAdCoverService.class)
-                .flattenToString();
+        ComponentName component = new ComponentName(this, LineAdCoverService.class);
         for (String entry : enabled.split(":")) {
-            if (component.equalsIgnoreCase(entry)) return true;
+            if (component.equals(ComponentName.unflattenFromString(entry))) return true;
         }
         return false;
     }
 
-    private void openLine() {
-        Intent intent = getPackageManager().getLaunchIntentForPackage(LINE_PACKAGE);
+    private void openApp(String packageName, int notInstalledMessage) {
+        Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
         if (intent == null) {
-            Toast.makeText(this, R.string.line_not_installed, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, notInstalledMessage, Toast.LENGTH_SHORT).show();
             return;
         }
         startActivity(intent);

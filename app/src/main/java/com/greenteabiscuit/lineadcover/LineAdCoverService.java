@@ -4,8 +4,10 @@ import android.accessibilityservice.AccessibilityService;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -13,6 +15,7 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -34,6 +37,7 @@ public final class LineAdCoverService extends AccessibilityService {
     private static final String TAG = "LineAdCover";
 
     private static final String LINE_PACKAGE = "jp.naver.line.android";
+    private static final String WECHAT_PACKAGE = "com.tencent.mm";
     private static final String NAVIGATION_VIEW_ID =
             "jp.naver.line.android:id/main_tab_container";
     private static final long RESCAN_DELAY_MS = 60;
@@ -56,7 +60,7 @@ public final class LineAdCoverService extends AccessibilityService {
     private final Runnable foregroundCheck = new Runnable() {
         @Override public void run() {
             AccessibilityNodeInfo root = getRootInActiveWindow();
-            if (root == null || !LINE_PACKAGE.contentEquals(root.getPackageName())) {
+            if (root == null || !isSupportedPackage(root.getPackageName())) {
                 clearTracking();
                 removeOverlays();
                 return;
@@ -72,10 +76,15 @@ public final class LineAdCoverService extends AccessibilityService {
             "LINE VOOM promotional banner mask");
     private final MaskOverlay homeTabMask = new MaskOverlay("LINE Home bottom tab mask");
     private final MaskOverlay bottomTabsMask = new MaskOverlay(
-            "LINE final three bottom tabs mask");
+            "LINE / WeChat final three bottom tabs mask");
     private int trackedBannerHeight;
     private int trackedListBottomOffset;
     private String lastDecision;
+    private String activePackage;
+    private WeChatVisualNavigation weChatVisualNavigation;
+    private boolean visualScanInFlight;
+    private long lastVisualScan;
+    private int visualGeneration;
 
     @Override public void onServiceConnected() {
         windowManager = getSystemService(WindowManager.class);
@@ -84,13 +93,17 @@ public final class LineAdCoverService extends AccessibilityService {
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (event.getPackageName() == null
-                || !LINE_PACKAGE.contentEquals(event.getPackageName())) {
+        if (!isSupportedPackage(event.getPackageName())) {
             handler.removeCallbacks(rescan);
             handler.removeCallbacks(settledRescan);
             clearTracking();
             removeOverlays();
             return;
+        }
+        if (WECHAT_PACKAGE.equals(activePackage)
+                && event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            visualGeneration++;
+            bottomTabsMask.remove();
         }
         handler.removeCallbacks(rescan);
         if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
@@ -115,6 +128,7 @@ public final class LineAdCoverService extends AccessibilityService {
         handler.removeCallbacksAndMessages(null);
         clearTracking();
         removeOverlays();
+        if (weChatVisualNavigation != null) weChatVisualNavigation.close();
         super.onDestroy();
     }
 
@@ -128,13 +142,25 @@ public final class LineAdCoverService extends AccessibilityService {
 
     private void scanAndUpdate() {
         AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null || !LINE_PACKAGE.contentEquals(root.getPackageName())) {
+        if (root == null || !isSupportedPackage(root.getPackageName())) {
             clearTracking();
             removeOverlays();
             return;
         }
 
+        // Never carry a LINE banner, tracking state, or tab geometry into WeChat.
+        String packageName = root.getPackageName().toString();
+        if (!packageName.equals(activePackage)) {
+            clearTracking();
+            removeOverlays();
+            activePackage = packageName;
+        }
         Rect displayRect = windowManager.getCurrentWindowMetrics().getBounds();
+        float density = getResources().getDisplayMetrics().density;
+        if (WECHAT_PACKAGE.equals(packageName)) {
+            updateWeChatTabs(root, displayRect, density);
+            return;
+        }
         Rect rootRect = new Rect();
         root.getBoundsInScreen(rootRect);
         if (!rootRect.isEmpty()
@@ -143,7 +169,6 @@ public final class LineAdCoverService extends AccessibilityService {
                 || bottomTabsMask.isVisible())) {
             return;
         }
-        float density = getResources().getDisplayMetrics().density;
         boolean friendsSubviewSelected =
                 isFriendsSubviewSelected(root, displayRect, density);
         NavigationState navigation = findNavigation(root, displayRect, density);
@@ -217,6 +242,117 @@ public final class LineAdCoverService extends AccessibilityService {
             return;
         }
         bannerMask.show(selected);
+    }
+
+    private static boolean isSupportedPackage(CharSequence packageName) {
+        return packageName != null && (LINE_PACKAGE.contentEquals(packageName)
+                || WECHAT_PACKAGE.contentEquals(packageName));
+    }
+
+    private void updateWeChatTabs(AccessibilityNodeInfo root, Rect displayRect, float density) {
+        List<WeChatNavigation.Tab> tabs = new ArrayList<>();
+        List<AdRowGeometry.Box> ancestors = new ArrayList<>();
+        Deque<AccessibilityNodeInfo> pending = new ArrayDeque<>();
+        pending.push(root);
+        int minTop = displayRect.top + Math.round(displayRect.height() * 0.60f);
+        while (!pending.isEmpty()) {
+            AccessibilityNodeInfo node = pending.pop();
+            Rect bounds = new Rect();
+            node.getBoundsInScreen(bounds);
+            if (node.isVisibleToUser() && !bounds.isEmpty() && bounds.top >= minTop
+                    && onVisiblePage(bounds, displayRect)) {
+                int tab = WeChatNavigation.tabIndex(node.getText());
+                if (tab < 0) tab = WeChatNavigation.tabIndex(node.getContentDescription());
+                if (tab >= 0) {
+                    tabs.add(new WeChatNavigation.Tab(tab, box(bounds)));
+                    ancestors.addAll(nodeAndAncestorBoxes(node));
+                }
+            }
+            for (int i = node.getChildCount() - 1; i >= 0; i--) {
+                AccessibilityNodeInfo child = node.getChild(i);
+                if (child != null) pending.push(child);
+            }
+        }
+        AdRowGeometry.Box navigation = WeChatNavigation.selectContainer(
+                ancestors, tabs, box(displayRect), density);
+        AdRowGeometry.Box mask = WeChatNavigation.hiddenTabs(navigation);
+        if (mask.height() > 0) {
+            bottomTabsMask.show(mask);
+        } else if (root.getChildCount() == 0) {
+            // Recent WeChat builds deliberately return an empty tree. Window capture
+            // excludes our own overlay, so OCR can revalidate the tabs without flashing.
+            updateWeChatVisualTabs(root, displayRect, density);
+            return;
+        } else {
+            bottomTabsMask.remove();
+        }
+        if (debugEnabled()) {
+            logDecision("wechat tabs " + (mask.height() > 0 ? "shown" : "hidden")
+                    + " labels=" + tabs.size() + " mask=" + mask);
+        }
+    }
+
+    private void updateWeChatVisualTabs(AccessibilityNodeInfo root, Rect display, float density) {
+        if (Build.VERSION.SDK_INT < 34) {
+            bottomTabsMask.remove();
+            return;
+        }
+        Rect windowBounds = new Rect();
+        AccessibilityWindowInfo window = root.getWindow();
+        if (window != null) window.getBoundsInScreen(windowBounds);
+        // Only the measured full-screen app window is supported by this fallback.
+        if (window == null || !windowBounds.equals(display)) {
+            bottomTabsMask.remove();
+            return;
+        }
+        if (visualScanInFlight || SystemClock.uptimeMillis() - lastVisualScan < 500) return;
+        visualScanInFlight = true;
+        lastVisualScan = SystemClock.uptimeMillis();
+        int generation = visualGeneration;
+        int windowId = root.getWindowId();
+        int bottomInset = windowManager.getCurrentWindowMetrics().getWindowInsets()
+                .getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom;
+        takeScreenshotOfWindow(windowId, getMainExecutor(), new TakeScreenshotCallback() {
+            @Override public void onSuccess(ScreenshotResult screenshot) {
+                if (!isCurrentWeChatCapture(generation, windowId)) {
+                    screenshot.getHardwareBuffer().close();
+                    visualScanInFlight = false;
+                    return;
+                }
+                if (weChatVisualNavigation == null) {
+                    weChatVisualNavigation = new WeChatVisualNavigation();
+                }
+                weChatVisualNavigation.detect(screenshot, windowBounds, bottomInset, density,
+                        detection -> {
+                            visualScanInFlight = false;
+                            if (!isCurrentWeChatCapture(generation, windowId)) return;
+                            if (detection == null) {
+                                bottomTabsMask.remove();
+                            } else {
+                                bottomTabsMask.show(WeChatNavigation.hiddenTabs(
+                                        detection.navigation()), detection.color());
+                            }
+                            if (debugEnabled()) {
+                                logDecision("wechat visual " + (detection == null
+                                        ? "hidden" : "shown row=" + detection.navigation()));
+                            }
+                        });
+            }
+
+            @Override public void onFailure(int errorCode) {
+                visualScanInFlight = false;
+                if (!isCurrentWeChatCapture(generation, windowId)) return;
+                bottomTabsMask.remove();
+                if (debugEnabled()) logDecision("wechat capture failed code=" + errorCode);
+            }
+        });
+    }
+
+    private boolean isCurrentWeChatCapture(int generation, int windowId) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        return generation == visualGeneration && WECHAT_PACKAGE.equals(activePackage)
+                && root != null && WECHAT_PACKAGE.contentEquals(root.getPackageName())
+                && root.getWindowId() == windowId;
     }
 
     private static boolean debugEnabled() {
@@ -756,6 +892,8 @@ public final class LineAdCoverService extends AccessibilityService {
         bannerMask.remove();
         homeTabMask.remove();
         bottomTabsMask.remove();
+        activePackage = null;
+        visualGeneration++;
     }
 
     private void clearTracking() {
@@ -815,7 +953,7 @@ public final class LineAdCoverService extends AccessibilityService {
                 displayRect.left, displayRect.top, displayRect.right, displayRect.top);
     }
 
-    /** LINE's own background behind every masked area, so the mask reads as empty space. */
+    /** Neutral, system-theme-matched fill shared by both apps' non-touchable masks. */
     private int maskColor() {
         int nightMode = getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK;
@@ -827,6 +965,7 @@ public final class LineAdCoverService extends AccessibilityService {
         private View view;
         private WindowManager.LayoutParams params;
         private AdRowGeometry.Box bounds;
+        private int color;
 
         private MaskOverlay(String title) {
             this.title = title;
@@ -837,6 +976,12 @@ public final class LineAdCoverService extends AccessibilityService {
         }
 
         private void show(AdRowGeometry.Box nextBounds) {
+            show(nextBounds, maskColor());
+        }
+
+        private void show(AdRowGeometry.Box nextBounds, int nextColor) {
+            if (view != null && color != nextColor) view.setBackgroundColor(nextColor);
+            color = nextColor;
             if (view != null && nextBounds.equals(bounds)) return;
             int contentTop = windowManager.getCurrentWindowMetrics()
                     .getWindowInsets()
@@ -855,7 +1000,7 @@ public final class LineAdCoverService extends AccessibilityService {
             }
 
             view = new View(LineAdCoverService.this);
-            view.setBackgroundColor(maskColor());
+            view.setBackgroundColor(color);
             view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             params = new WindowManager.LayoutParams(
                     nextBounds.width(),

@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">LINE Ad Cover</string>
-    <string name="service_name">LINE promotional banner cover</string>
-    <string name="accessibility_description">Uses LINE accessibility content only to locate and visually mask the promotional banner in Chats and every bottom tab except Chats. No data is stored or transmitted.</string>
-    <string name="title">LINE Ad Cover</string>
-    <string name="explanation">Masks the LINE VOOM promotional banner shown between Search and your first chat, plus Home and the final three bottom tabs, leaving only Chats visible. It supports both the original and redesigned LINE layouts.</string>
-    <string name="privacy">Accessibility access is used only to find and mask these areas while LINE is on screen. No content or personal data is stored or transmitted.</string>
+    <string name="app_name">LINE &amp; WeChat Cover</string>
+    <string name="service_name">LINE &amp; WeChat screen cover</string>
+    <string name="accessibility_description">Masks the LINE promotional banner and every bottom tab except Chats; masks Contacts, Discover and Me in WeChat. If WeChat hides its accessibility content, captures its window and recognizes only the bottom strip on-device. No images or chat content are saved or sent.</string>
+    <string name="title">LINE &amp; WeChat Cover</string>
+    <string name="explanation">LINE: hides the promotional banner and every bottom tab except Chats.\n\nWeChat: hides Contacts, Discover and Me, leaving Chats visible.\n\nCovers are visual only: touches still pass through.</string>
+    <string name="privacy">Works only while LINE or WeChat is on screen. WeChat may use on-device image recognition of the bottom navigation. No images or chat content are saved or sent. No network access.</string>
     <string name="status_enabled">Accessibility service: enabled</string>
     <string name="status_disabled">Accessibility service: disabled</string>
     <string name="open_accessibility">Open Accessibility Settings</string>
     <string name="open_line">Open LINE</string>
     <string name="line_not_installed">LINE is not installed or cannot be opened.</string>
+    <string name="open_wechat">Open WeChat</string>
+    <string name="wechat_not_installed">WeChat is not installed or cannot be opened.</string>
 </resources>
