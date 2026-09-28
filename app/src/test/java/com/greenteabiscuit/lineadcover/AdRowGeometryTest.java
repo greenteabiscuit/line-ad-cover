@@ -11,6 +11,46 @@ import java.util.List;
 public final class AdRowGeometryTest {
     private static final AdRowGeometry.Box DISPLAY = new AdRowGeometry.Box(0, 0, 1080, 2340);
 
+    @Test public void searchWordInChatPreviewDoesNotDisplaceSearchBar() {
+        // Pixel 7 Pro, LINE 26.14: the preview passes the Search geometry limits.
+        AdRowGeometry.Box search = new AdRowGeometry.Box(42, 237, 933, 350);
+        AdRowGeometry.Box preview = new AdRowGeometry.Box(205, 707, 924, 796);
+        AdRowGeometry.Box list = new AdRowGeometry.Box(0, 644, 1080, 2148);
+
+        for (List<AdRowGeometry.Box> candidates : List.of(
+                List.of(search, preview), List.of(preview, search))) {
+            AdRowGeometry.Box control = AdRowGeometry.selectUpperControl(
+                    candidates, List.of(list), DISPLAY);
+            assertEquals(search, control);
+            assertEquals(new AdRowGeometry.Box(0, 350, 1080, 644),
+                    AdRowGeometry.fromGap(control.bottom(), list.top(), DISPLAY, 2.625f));
+        }
+    }
+
+    @Test public void onlySearchMentionInsideListIsNotAnIdentifiedSearchControl() {
+        assertEquals(new AdRowGeometry.Box(0, 0, 1080, 0),
+                AdRowGeometry.selectUpperControl(
+                        List.of(new AdRowGeometry.Box(205, 707, 924, 796)),
+                        List.of(new AdRowGeometry.Box(0, 644, 1080, 2148)), DISPLAY));
+    }
+
+    @Test public void controlCanTouchListButMustNotOverlapIt() {
+        AdRowGeometry.Box list = new AdRowGeometry.Box(0, 350, 1080, 2148);
+        AdRowGeometry.Box touching = new AdRowGeometry.Box(42, 237, 933, 350);
+        AdRowGeometry.Box overlapping = new AdRowGeometry.Box(42, 238, 933, 351);
+
+        assertEquals(touching, AdRowGeometry.selectUpperControl(
+                List.of(touching, overlapping), List.of(list), DISPLAY));
+    }
+
+    @Test public void lowestControlStillWinsOutsideLists() {
+        AdRowGeometry.Box lower = new AdRowGeometry.Box(42, 237, 933, 350);
+
+        assertEquals(lower, AdRowGeometry.selectUpperControl(
+                List.of(lower, new AdRowGeometry.Box(42, 120, 933, 200)),
+                List.of(), DISPLAY));
+    }
+
     @Test public void choosesPlausibleFullRowAncestor() {
         AdRowGeometry.Box result = AdRowGeometry.select(
                 new AdRowGeometry.Box(120, 410, 520, 455),

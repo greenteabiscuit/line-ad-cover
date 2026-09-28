@@ -480,9 +480,9 @@ public final class LineAdCoverService extends AccessibilityService {
                 + Math.round(displayRect.height() * UPPER_CONTROLS_BOTTOM_FRACTION);
         int navigationTop = displayRect.top
                 + Math.round(displayRect.height() * NAVIGATION_TOP_FRACTION);
-        List<Rect> searchBounds = new ArrayList<>();
-        List<Rect> clickableBounds = new ArrayList<>();
-        List<Rect> scrollableBounds = new ArrayList<>();
+        List<AdRowGeometry.Box> searchBounds = new ArrayList<>();
+        List<AdRowGeometry.Box> clickableBounds = new ArrayList<>();
+        List<AdRowGeometry.Box> scrollableBounds = new ArrayList<>();
 
         Deque<AccessibilityNodeInfo> pending = new ArrayDeque<>();
         pending.push(root);
@@ -504,15 +504,15 @@ public final class LineAdCoverService extends AccessibilityService {
                 if (controlGeometry
                         && (LineUiLabels.isSearch(searchableText(node))
                         || LineUiLabels.isSearch(subtreeText(node, 3)))) {
-                    searchBounds.add(bounds);
+                    searchBounds.add(box(bounds));
                 } else if (controlGeometry && node.isClickable()) {
-                    clickableBounds.add(bounds);
+                    clickableBounds.add(box(bounds));
                 }
                 if (isScrollableNode(node)
                         && visibleWidth(bounds, displayRect) >= minListWidth
                         && bounds.top > displayRect.top
                         && bounds.top < navigationTop) {
-                    scrollableBounds.add(bounds);
+                    scrollableBounds.add(box(bounds));
                 }
             }
             for (int i = node.getChildCount() - 1; i >= 0; i--) {
@@ -521,29 +521,30 @@ public final class LineAdCoverService extends AccessibilityService {
             }
         }
 
-        int controlTop = displayRect.top;
-        int controlBottom = displayRect.top;
-        boolean searchIdentified = !searchBounds.isEmpty();
-        List<Rect> controls = searchIdentified ? searchBounds : clickableBounds;
-        for (Rect bounds : controls) {
-            if (bounds.bottom > controlBottom) {
-                controlTop = bounds.top;
-                controlBottom = bounds.bottom;
-            }
+        // Resolve controls only after collecting lists: message previews containing
+        // "Search" must not displace the real bar or suppress the clickable fallback.
+        AdRowGeometry.Box control = AdRowGeometry.selectUpperControl(
+                searchBounds, scrollableBounds, box(displayRect));
+        boolean searchIdentified = control.height() > 0;
+        if (!searchIdentified) {
+            control = AdRowGeometry.selectUpperControl(
+                    clickableBounds, scrollableBounds, box(displayRect));
         }
+        int controlTop = control.top();
+        int controlBottom = control.bottom();
 
         // The highest list that genuinely starts below the controls, or null. Never
         // substitute a synthetic edge: callers must be able to tell "the list is here"
         // from "no list was found", because only the former can bound the banner.
-        Rect list = null;
-        for (Rect bounds : scrollableBounds) {
-            if ((controlBottom <= displayRect.top || bounds.top >= controlBottom)
-                    && (list == null || bounds.top < list.top)) {
+        AdRowGeometry.Box list = null;
+        for (AdRowGeometry.Box bounds : scrollableBounds) {
+            if ((controlBottom <= displayRect.top || bounds.top() >= controlBottom)
+                    && (list == null || bounds.top() < list.top())) {
                 list = bounds;
             }
         }
         return new LayoutMetrics(
-                controlTop, controlBottom, searchIdentified, list == null ? null : box(list));
+                controlTop, controlBottom, searchIdentified, list);
     }
 
     private AdRowGeometry.Box findPromoGap(

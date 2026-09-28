@@ -23,6 +23,28 @@ public final class AdRowGeometry {
     }
 
     /**
+     * Chooses the lowest upper control outside the visible lists. A chat preview can
+     * mention "Search" or "検索" and satisfy the same width/height limits as the real
+     * Search bar, but it is list content, not a control above the promotional gap.
+     * Lists here exclude the full-screen pager and off-screen pages.
+     */
+    public static Box selectUpperControl(List<Box> candidates, List<Box> lists, Box display) {
+        Box selected = new Box(display.left, display.top, display.right, display.top);
+        for (Box candidate : candidates) {
+            boolean overlapsList = false;
+            for (Box list : lists) {
+                if (candidate.left < list.right && candidate.right > list.left
+                        && candidate.top < list.bottom && candidate.bottom > list.top) {
+                    overlapsList = true;
+                    break;
+                }
+            }
+            if (!overlapsList && candidate.bottom > selected.bottom) selected = candidate;
+        }
+        return selected;
+    }
+
+    /**
      * Ancestors must be ordered nearest-first. Picks the nearest plausible row while
      * refusing root/window-sized containers. Falls back to density-aware padding.
      */
